@@ -23,34 +23,35 @@ class CocoDataset(data.Dataset):
         """
         self.root = root
         self.coco = COCO(json)
-        self.ids = list(self.coco.anns.keys())
+        self.img_ids = list(self.coco.imgs.keys())
+        self.img_id_to_anns = self.coco.imgToAnns
         self.vocab = vocab
         self.transform = transform
 
     def __getitem__(self, index):
-        """Returns one data pair (image and caption)."""
-        coco = self.coco
         vocab = self.vocab
-        ann_id = self.ids[index]
-        caption = coco.anns[ann_id]['caption']
-        img_id = coco.anns[ann_id]['image_id']
-        path = coco.loadImgs(img_id)[0]['file_name']
-
+        img_id = self.img_ids[index]
+        
+        # Randomly select one caption for this image
+        annotations = self.img_id_to_anns[img_id]
+        ann = np.random.choice(annotations)
+        caption = ann['caption']
+        
+        # Load image
+        path = self.coco.loadImgs(img_id)[0]['file_name']
         image = Image.open(os.path.join(self.root, path)).convert('RGB')
         if self.transform is not None:
             image = self.transform(image)
 
-        # Convert caption (string) to word ids.
+        # Tokenize caption
         tokens = nltk.tokenize.word_tokenize(str(caption).lower())
-        caption = []
-        caption.append(vocab('<start>'))
-        caption.extend([vocab(token) for token in tokens])
-        caption.append(vocab('<end>'))
-        target = torch.Tensor(caption)
+        caption_ids = [vocab('<start>')] + [vocab(token) for token in tokens] + [vocab('<end>')]
+        target = torch.Tensor(caption_ids)
+
         return image, target
 
     def __len__(self):
-        return len(self.ids)
+        return len(self.img_ids)
 
 
 def collate_fn(data):
@@ -84,20 +85,36 @@ def collate_fn(data):
         targets[i, :end] = cap[:end]        
     return images, targets, lengths
 
-def get_loader(root, json, vocab, transform, batch_size, shuffle, num_workers):
-    """Returns torch.utils.data.DataLoader for custom coco dataset."""
-    # COCO caption dataset
-    coco = CocoDataset(root=root,
-                       json=json,
-                       vocab=vocab,
-                       transform=transform)
+# def get_loader(root, json, vocab, transform, batch_size, shuffle, num_workers):
+#     """Returns torch.utils.data.DataLoader for custom coco dataset."""
+#     # COCO caption dataset
+#     coco = CocoDataset(root=root,
+#                        json=json,
+#                        vocab=vocab,
+#                        transform=transform)
     
-    # Data loader for COCO dataset
-    # This will return (images, captions, lengths) for each iteration.
-    # images: a tensor of shape (batch_size, 3, 224, 224).
-    # captions: a tensor of shape (batch_size, padded_length).
-    # lengths: a list indicating valid length for each caption. length is (batch_size).
-    data_loader = torch.utils.data.DataLoader(dataset=coco, 
+#     # Data loader for COCO dataset
+#     # This will return (images, captions, lengths) for each iteration.
+#     # images: a tensor of shape (batch_size, 3, 224, 224).
+#     # captions: a tensor of shape (batch_size, padded_length).
+#     # lengths: a list indicating valid length for each caption. length is (batch_size).
+#     data_loader = torch.utils.data.DataLoader(dataset=coco, 
+#                                               batch_size=batch_size,
+#                                               shuffle=shuffle,
+#                                               num_workers=num_workers,
+#                                               collate_fn=collate_fn)
+#     return data_loader
+
+def get_loader(image_dir, caption_path, vocab, transform, batch_size, shuffle, num_workers, return_dataset=False):
+    dataset = CocoDataset(root=image_dir,
+                          json=caption_path,
+                          vocab=vocab,
+                          transform=transform)
+
+    if return_dataset:
+        return dataset
+
+    data_loader = torch.utils.data.DataLoader(dataset=dataset,
                                               batch_size=batch_size,
                                               shuffle=shuffle,
                                               num_workers=num_workers,
