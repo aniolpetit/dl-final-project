@@ -14,8 +14,8 @@ from build_vocab import Vocabulary
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Config
-ENCODER_PATH = 'models/encoder-5-647-2.ckpt'
-DECODER_PATH = 'models/decoder-5-647-2.ckpt'
+ENCODER_PATH = 'models/encoder-5-647.ckpt'
+DECODER_PATH = 'models/decoder-5-647.ckpt'
 VOCAB_PATH = 'data/vocab_nostre.pkl'
 EMBED_SIZE = 256
 HIDDEN_SIZE = 512
